@@ -107,7 +107,8 @@ fi
 if [[ "$1" == "start" ]]; then
     mkdir -p results
     docker run --tty --rm --detach --privileged \
-          --memory 6.5g \
+          --memory 4.0g \
+          --memory-swap 6.0g \
           --name runner \
           --cap-add=SYS_PTRACE \
           --security-opt seccomp=unconfined \

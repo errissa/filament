@@ -1,0 +1,19 @@
+name: SwiftShader
+
+on:
+  push:
+    branches:
+      - pr/docker_proper_action # TODO: replace with rc/**
+  schedule:
+    - cron: '1 0 * * *' # Run at midnight every day.
+
+jobs:
+  swiftshader:
+    name: Test Filament + Vulkan + SwiftShader
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2.0.0
+    - uses: .github/actions/swiftshader
+      with:
+        command: build
+        subcommand: filament

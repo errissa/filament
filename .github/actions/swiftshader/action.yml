@@ -1,0 +1,13 @@
+name: 'Test SwiftShader'
+description: 'Build and Test Filament with SwiftShader'
+inputs:
+  command:
+    required: true
+  subcommand:
+    required: false
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.command }}
+    - ${{ inputs.subcommand }}
