@@ -212,6 +212,10 @@ struct FFilamentAsset : public FilamentAsset {
         mDependencyGraph.addEdge(texture, tb.materialInstance, tb.materialParameter);
     }
 
+    bool isInstanced() const {
+        return mInstances.size() > 0;
+    }
+
     filament::Engine* mEngine;
     utils::NameComponentManager* mNameManager;
     utils::EntityManager* mEntityManager;
@@ -249,6 +253,7 @@ struct FFilamentAsset : public FilamentAsset {
     std::vector<std::pair<const cgltf_primitive*, filament::VertexBuffer*> > mPrimitives;
     MatInstanceCache mMatInstanceCache;
     MeshCache mMeshCache;
+    bool mIsReleased = false;
 };
 
 FILAMENT_UPCAST(FilamentAsset)
