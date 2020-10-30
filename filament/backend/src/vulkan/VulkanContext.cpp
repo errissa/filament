@@ -31,6 +31,7 @@
 #pragma clang diagnostic pop
 
 #include "VulkanContext.h"
+#include "VulkanHandles.h"
 #include "VulkanUtility.h"
 
 #include <utils/Panic.h>
@@ -829,6 +830,102 @@ VkImageLayout getTextureLayout(TextureUsage usage) {
 
     // Finally, the layout for an immutable texture is optimal read-only.
     return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+}
+
+void blitDepth(VulkanContext* context, const VulkanRenderTarget* dstTarget,
+        const VkOffset3D dstRect[2], const VulkanRenderTarget* srcTarget,
+        const VkOffset3D srcRect[2]) {
+    // TODO
+}
+
+void blitColor(VulkanContext* context, const VulkanRenderTarget* dstTarget,
+        const VkOffset3D dstRect[2], const VulkanRenderTarget* srcTarget,
+        const VkOffset3D srcRect[2], VkFilter filter, int targetIndex) {
+
+    // In debug builds, verify that the two render targets have blittable formats.
+#ifndef NDEBUG
+    const VkPhysicalDevice gpu = context->physicalDevice;
+    VkFormatProperties info;
+    vkGetPhysicalDeviceFormatProperties(gpu, srcTarget->getColor(targetIndex).format, &info);
+    if (!ASSERT_POSTCONDITION_NON_FATAL(info.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT,
+            "Source format is not blittable")) {
+        return;
+    }
+    vkGetPhysicalDeviceFormatProperties(gpu, dstTarget->getColor(targetIndex).format, &info);
+    if (!ASSERT_POSTCONDITION_NON_FATAL(info.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT,
+            "Destination format is not blittable")) {
+        return;
+    }
+#endif
+
+    const uint32_t srcLevel = srcTarget->getColor(targetIndex).level;
+    const uint32_t srcLayer = srcTarget->getColor(targetIndex).layer;
+
+    const uint32_t dstLevel = dstTarget->getColor(targetIndex).level;
+    const uint32_t dstLayer = dstTarget->getColor(targetIndex).layer;
+
+    const VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    const VkImageBlit blitRegions[1] = {{
+        .srcSubresource = { aspect, srcLevel, srcLayer, 1 },
+        .srcOffsets = { srcRect[0], srcRect[1] },
+        .dstSubresource = { aspect, dstLevel, dstLayer, 1 },
+        .dstOffsets = { dstRect[0], dstRect[1] }
+    }};
+
+    const VkExtent2D srcExtent = srcTarget->getExtent();
+
+    const VkImageResolve resolveRegions[1] = {{
+        .srcSubresource = { aspect, srcLevel, srcLayer, 1 },
+        .srcOffset = srcRect[0],
+        .dstSubresource = { aspect, dstLevel, dstLayer, 1 },
+        .dstOffset = dstRect[0],
+        .extent = { srcExtent.width, srcExtent.height, 1 }
+    }};
+
+    const VulkanTexture* srcTexture = srcTarget->getColor(targetIndex).texture;
+    const VulkanTexture* dstTexture = dstTarget->getColor(targetIndex).texture;
+
+    auto vkblit = [=](VkCommandBuffer cmdbuffer) {
+        VkImage srcImage = srcTarget->getColor(targetIndex).image;
+        VulkanTexture::transitionImageLayout(cmdbuffer, srcImage, VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcLevel, 1, 1, aspect);
+
+        VkImage dstImage = dstTarget->getColor(targetIndex).image;
+        VulkanTexture::transitionImageLayout(cmdbuffer, dstImage, VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, dstLevel, 1, 1, aspect);
+
+        if (srcTexture && srcTexture->samples > 1 && dstTexture && dstTexture->samples == 1) {
+            vkCmdResolveImage(cmdbuffer, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, resolveRegions);
+        } else {
+            vkCmdBlitImage(cmdbuffer, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, blitRegions, filter);
+        }
+
+        if (srcTexture) {
+            VulkanTexture::transitionImageLayout(cmdbuffer, srcImage, VK_IMAGE_LAYOUT_UNDEFINED,
+                    getTextureLayout(srcTexture->usage), srcLevel, 1, 1, aspect);
+        } else if  (!context->currentSurface->headlessQueue) {
+            VulkanTexture::transitionImageLayout(cmdbuffer, srcImage, VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, srcLevel, 1, 1, aspect);
+        }
+
+        // Determine the desired texture layout for the destination while ensuring that the default
+        // render target is supported, which has no associated texture.
+        const VkImageLayout desiredLayout = dstTexture ? getTextureLayout(dstTexture->usage) :
+                getSwapContext(*context).attachment.layout;
+
+        VulkanTexture::transitionImageLayout(cmdbuffer, dstImage, VK_IMAGE_LAYOUT_UNDEFINED,
+                desiredLayout, dstLevel, 1, 1, aspect);
+    };
+
+    if (!context->currentCommands) {
+        vkblit(acquireWorkCommandBuffer(*context));
+        flushWorkCommandBuffer(*context);
+    } else {
+        vkblit(context->currentCommands->cmdbuffer);
+    }
 }
 
 } // namespace filament
