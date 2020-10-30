@@ -92,6 +92,7 @@ if (NOT FILAMENT_USE_EXTERNAL_GLES3 AND NOT FILAMENT_USE_SWIFTSHADER)
         list(APPEND SRCS src/opengl/PlatformWebGL.cpp)
     elseif (LINUX)
         list(APPEND SRCS src/opengl/PlatformGLX.cpp)
+        list(APPEND SRCS src/opengl/PlatformEGLHeadless.cpp)
     elseif (WIN32)
         list(APPEND SRCS src/opengl/PlatformWGL.cpp)
     else()
@@ -223,7 +224,7 @@ if (FILAMENT_SUPPORTS_METAL)
 endif()
 
 if (LINUX)
-    target_link_libraries(${TARGET} PRIVATE dl)
+    target_link_libraries(${TARGET} PRIVATE EGL dl)
 endif()
 
 # ==================================================================================================
