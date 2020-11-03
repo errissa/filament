@@ -515,6 +515,7 @@ VulkanTexture::VulkanTexture(VulkanContext& context, SamplerType target, uint8_t
     }
 
     // Filament expects blit() to work with any texture, so we almost always set these usage flags.
+    // TODO: investigate performance implications of setting these flags.
     const VkImageUsageFlags blittable = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
@@ -545,6 +546,7 @@ VulkanTexture::VulkanTexture(VulkanContext& context, SamplerType target, uint8_t
         imageInfo.usage |= blittable;
     }
     if (any(usage & TextureUsage::DEPTH_ATTACHMENT)) {
+        imageInfo.usage |= blittable;
         imageInfo.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
 
@@ -773,6 +775,7 @@ VkImageView VulkanTexture::getImageView(int level, int layer, VkImageAspectFlags
 }
 
 // TODO: replace the last 4 args with VkImageSubresourceRange
+// TODO: replace this function with a flexible thin wrapper over image barrier creation
 void VulkanTexture::transitionImageLayout(VkCommandBuffer cmd, VkImage image,
         VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t miplevel,
         uint32_t layerCount, uint32_t levelCount, VkImageAspectFlags aspect) {
@@ -816,6 +819,7 @@ void VulkanTexture::transitionImageLayout(VkCommandBuffer cmd, VkImage image,
 
         // We support PRESENT as a target layout to allow blitting from the swap chain.
         // See also makeSwapChainPresentable().
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
         case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
             barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
             barrier.dstAccessMask = 0;
